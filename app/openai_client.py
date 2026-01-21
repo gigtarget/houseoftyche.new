@@ -56,6 +56,8 @@ class OpenAIClient:
         }
         if is_gpt_image:
             payload["output_format"] = "png"
+            payload["quality"] = "high"
+            payload["background"] = "transparent"
         else:
             payload["response_format"] = "b64_json"
         logger.info(

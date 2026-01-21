@@ -5,6 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import openai
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -27,6 +28,8 @@ if not OPENAI_API_KEY:
     logger.warning("OPENAI_API_KEY is not set")
 if not OWNER_TELEGRAM_ID:
     logger.warning("OWNER_TELEGRAM_ID is not set")
+
+logger.info("OpenAI SDK version: %s", openai.__version__)
 
 telegram_client = TelegramClient(TELEGRAM_BOT_TOKEN)
 openai_client = OpenAIClient(OPENAI_API_KEY)
