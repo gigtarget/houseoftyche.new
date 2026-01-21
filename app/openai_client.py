@@ -16,6 +16,20 @@ from app.prompts import build_image_prompt
 logger = logging.getLogger(__name__)
 
 
+def build_image_payload(model: str, prompt: str) -> tuple[dict[str, Any], str, bool]:
+    is_gpt_image = model.startswith("gpt-image-")
+    size = "1536x1024" if is_gpt_image else "1792x1024"
+    payload: dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "n": 1,
+        "size": size,
+    }
+    if not is_gpt_image:
+        payload["response_format"] = "b64_json"
+    return payload, size, is_gpt_image
+
+
 class OpenAIClient:
     def __init__(self, api_key: str) -> None:
         self.client = OpenAI(api_key=api_key)
@@ -46,27 +60,17 @@ class OpenAIClient:
         prompt = build_image_prompt(title=title, vibe=vibe)
         final_prompt = f"{prompt.prompt}\n\nNEGATIVE: {prompt.negative_prompt}"
         model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
-        is_gpt_image = model.startswith("gpt-image-")
-        size = "1536x1024" if is_gpt_image else "1792x1024"
-        payload = {
-            "model": model,
-            "prompt": final_prompt,
-            "n": 1,
-            "size": size,
-        }
-        if is_gpt_image:
-            payload["output_format"] = "png"
-            payload["quality"] = "high"
-            payload["background"] = "transparent"
-        else:
-            payload["response_format"] = "b64_json"
-        logger.info(
-            "Image generation request model=%s size=%s response_format_omitted=%s",
-            model,
-            size,
-            is_gpt_image,
-        )
-        response = self.client.images.generate(**payload)
+        payload, size, _ = build_image_payload(model, final_prompt)
+        logger.info("Image generation request model=%s size=%s", model, size)
+        try:
+            response = self.client.images.generate(**payload)
+        except TypeError as exc:
+            logger.warning(
+                "Images.generate TypeError; retry with minimal payload: %s", exc
+            )
+            for key in ("output_format", "quality", "background", "response_format"):
+                payload.pop(key, None)
+            response = self.client.images.generate(**payload)
         data = response.data[0]
         if getattr(data, "b64_json", None):
             image_bytes = base64.b64decode(data.b64_json)
