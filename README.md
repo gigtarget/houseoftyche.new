@@ -13,10 +13,14 @@ Set these in Railway:
 - `IMAGE_VIBE`: `dark`, `clean`, or `antique` (default `clean`).
 - `LOG_LEVEL`: Optional logging level (e.g. `INFO`, `DEBUG`).
 
-## Getting Your Telegram User ID
+## How to get OWNER_TELEGRAM_ID
 
-1. Message the `@userinfobot` on Telegram.
-2. Copy the `id` field; use it as `OWNER_TELEGRAM_ID`.
+1. Deploy the service.
+2. Send any message to the bot.
+3. Open Railway → Deploy Logs.
+4. Copy the number from: `TELEGRAM DEBUG — chat_id=XXXXXXXXX`.
+5. Set `OWNER_TELEGRAM_ID` in Railway → Variables.
+6. Redeploy.
 
 ## Webhook Setup
 
