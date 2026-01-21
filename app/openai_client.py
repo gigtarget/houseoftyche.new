@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import re
 import string
 from typing import Any
@@ -43,18 +44,36 @@ class OpenAIClient:
 
     def generate_thumbnail(self, title: str, vibe: str) -> bytes:
         prompt = build_image_prompt(title=title, vibe=vibe)
-        final_prompt = f"{prompt.prompt}\n\nNEGATIVE PROMPT: {prompt.negative_prompt}"
-        response = self.client.images.generate(
-            model="gpt-image-1",
-            prompt=final_prompt,
-            size="1792x1024",
-            response_format="b64_json",
+        final_prompt = f"{prompt.prompt}\n\nNEGATIVE: {prompt.negative_prompt}"
+        model = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
+        is_gpt_image = model.startswith("gpt-image-")
+        size = "1536x1024" if is_gpt_image else "1792x1024"
+        payload = {
+            "model": model,
+            "prompt": final_prompt,
+            "n": 1,
+            "size": size,
+        }
+        if is_gpt_image:
+            payload["output_format"] = "png"
+        else:
+            payload["response_format"] = "b64_json"
+        logger.info(
+            "Image generation request model=%s size=%s response_format_omitted=%s",
+            model,
+            size,
+            is_gpt_image,
         )
+        response = self.client.images.generate(**payload)
         data = response.data[0]
         if getattr(data, "b64_json", None):
-            return base64.b64decode(data.b64_json)
+            image_bytes = base64.b64decode(data.b64_json)
+            logger.info("Image bytes length: %s", len(image_bytes))
+            return image_bytes
         if getattr(data, "url", None):
-            return self._download_image(data.url)
+            image_bytes = self._download_image(data.url)
+            logger.info("Image bytes length: %s", len(image_bytes))
+            return image_bytes
         raise ValueError("OpenAI image response missing data")
 
     def _download_image(self, url: str) -> bytes:
