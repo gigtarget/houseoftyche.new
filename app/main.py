@@ -5,7 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.openai_client import OpenAIClient
@@ -61,9 +61,35 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/debug/chat-id")
+async def debug_chat_id() -> dict:
+    return {
+        "instruction": (
+            "Send any message to the Telegram bot, then check Railway logs for "
+            "TELEGRAM DEBUG — chat_id=..."
+        )
+    }
+
+
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request) -> JSONResponse:
     payload = await request.json()
+    raw_message = payload.get("message") or payload.get("edited_message")
+    if not raw_message or not isinstance(raw_message, dict):
+        return JSONResponse({"status": "ignored"})
+    chat = raw_message.get("chat", {})
+    from_user = raw_message.get("from", {})
+    chat_id = chat.get("id")
+    user_id = from_user.get("id")
+    username = from_user.get("username") or "unknown"
+    chat_type = chat.get("type")
+    logger.warning(
+        "TELEGRAM DEBUG — chat_id=%s user_id=%s username=%s chat_type=%s",
+        chat_id,
+        user_id,
+        username,
+        chat_type,
+    )
     message = extract_message(payload)
     if not message:
         return JSONResponse({"status": "ignored"})
@@ -71,7 +97,12 @@ async def telegram_webhook(request: Request) -> JSONResponse:
 
     owner_id = _owner_id()
     if owner_id is None:
-        raise HTTPException(status_code=500, detail="Owner not configured")
+        logger.warning("OWNER_TELEGRAM_ID not set — running in open debug mode")
+        await telegram_client.send_message(
+            message.chat_id,
+            "Debug mode: check Railway logs to get your chat_id, then set OWNER_TELEGRAM_ID",
+        )
+        return JSONResponse({"status": "debug"})
 
     if message.chat_type != "private":
         logger.info("Ignoring non-private chat type=%s", message.chat_type)
